@@ -1,0 +1,276 @@
+<!DOCTYPE html><html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>نینجا دراپ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; }
+    body { background: #0d0d0d; color: #fff; overflow: hidden; }
+    #loadingScreen {
+      position: fixed; inset: 0; background: #000; display: flex;
+      flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+    }
+    .progress-bar {
+      width: 80%; height: 10px; background: #222; border-radius: 10px; overflow: hidden; margin-top: 20px;
+    }
+    .progress-fill {
+      width: 0%; height: 100%; background: orange; animation: fill 1s forwards;
+    }
+    @keyframes fill { to { width: 100%; } }
+    .typing { font-size: 24px; display: flex; align-items: center; }
+    .typing span { margin-left: 10px; display: inline-block; width: 1ch; animation: blink 1s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+    #menu {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      position: absolute; inset: 0; background: #0d0d0d;
+    }
+    #menu h1 { font-size: 48px; margin-bottom: 30px; color: #00ffe7; text-shadow: 0 0 10px #00ffe7; }
+    .menu-btn {
+      padding: 15px 30px; margin: 10px; font-size: 20px; border: none;
+      border-radius: 15px; background: #1e1e1e; color: white;
+      box-shadow: 0 0 10px #00ffe7; cursor: pointer; transition: 0.3s;
+    }
+    .menu-btn:hover { background: #333; }
+    #settings {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      position: absolute; inset: 0; background: #0d0d0d;
+    }
+    #game {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      position: absolute; inset: 0; background: #0a0a0a;
+    }
+    .scoreboard {
+      display: flex; align-items: center; justify-content: center;
+      background: #111; padding: 15px 30px; border-radius: 20px; margin-bottom: 20px;
+      box-shadow: 0 0 15px #00ffe7;
+    }
+    .scoreboard div { margin: 0 20px; text-align: center; }
+    .scoreboard .vs { font-size: 24px; color: #ff0080; }
+    .board {
+      display: grid; grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px); gap: 10px;
+    }
+    .cell {
+      width: 100px; height: 100px; background: #111;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px; border-radius: 15px; cursor: pointer;
+      box-shadow: 0 0 10px #000 inset; transition: 0.2s;
+    }
+    .cell:hover { background: #1c1c1c; }
+    .controls { margin-top: 20px; }
+    .controls button {
+      margin: 0 10px; padding: 10px 20px; border: none; border-radius: 10px;
+      font-size: 16px; cursor: pointer; background: #333; color: white;
+      box-shadow: 0 0 10px #00ffe7;
+    }
+    .timer { margin-top: 15px; font-size: 18px; color: #ff0; }
+    .win-message {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 32px; color: #00ffe7; text-shadow: 0 0 10px #00ffe7;
+      display: none; z-index: 200; padding: 20px;
+      background-color: rgba(0, 0, 0, 0.7); border-radius: 15px;
+      box-shadow: 0 0 15px #00ffe7;
+    }
+  </style>
+</head>
+<body>
+  <div id="loadingScreen">
+    <div class="typing">Loading <span>.</span><span>.</span><span>.</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <div id="menu">
+    <h1>نینجا دراپ</h1>
+    <button class="menu-btn" onclick="startTwoPlayer()">بازی دو نفره</button>
+    <button class="menu-btn" onclick="showRobotLevels()">بازی با ربات</button>
+    <div id="robotLevels" style="margin-top: 10px; display:none;">
+      <button class="menu-btn" onclick="startRobotGame('easy')">آسان</button>
+      <button class="menu-btn" onclick="startRobotGame('medium')">متوسط</button>
+      <button class="menu-btn" onclick="startRobotGame('hard')">سخت</button>
+    </div>
+  </div>
+
+  <div id="game">
+    <div class="scoreboard">
+      <div id="player1Info">بیتکوین (₿)<br><span id="score1">0</span></div>
+      <div class="vs">VS</div>
+      <div id="player2Info">اتریوم (Ξ)<br><span id="score2">0</span></div>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="timer" id="timer">زمان باقی‌مانده: ۱۵</div>
+    <div class="controls">
+      <button onclick="fullReset()">شروع مجدد</button>
+      <button onclick="goToMenu()">بازگشت به منو</button>
+    </div>
+  </div>
+
+  <div class="win-message" id="winMessage"></div>
+
+  <script>
+    const loadingScreen = document.getElementById("loadingScreen");
+    const menu = document.getElementById("menu");
+    const game = document.getElementById("game");
+    const boardEl = document.getElementById("board");
+    const score1El = document.getElementById("score1");
+    const score2El = document.getElementById("score2");
+    const timerEl = document.getElementById("timer");
+    const robotLevels = document.getElementById("robotLevels");
+    const winMessage = document.getElementById("winMessage");
+
+    const PLAYER1 = { name: "بیتکوین", symbol: "₿", color: "orange", score: 0 };
+    const PLAYER2 = { name: "اتریوم", symbol: "Ξ", color: "deepskyblue", score: 0 };
+
+    let currentPlayer = PLAYER1;
+    let opponent = PLAYER2;
+    let board = ["", "", "", "", "", "", "", "", ""];
+    let vsRobot = false;
+    let robotDifficulty = "easy";
+    let timer;
+    let timeLeft = 15;
+    let gameEnded = false;
+
+    window.onload = () => {
+      setTimeout(() => {
+        loadingScreen.style.display = "none";
+        menu.style.display = "flex";
+      }, 1200);
+    };
+
+    function showRobotLevels() { robotLevels.style.display = "block"; }
+    function startTwoPlayer() { vsRobot = false; startGame(); }
+    function startRobotGame(difficulty) { robotDifficulty = difficulty; vsRobot = true; startGame(); }
+
+    function startGame() {
+      menu.style.display = "none";
+      game.style.display = "flex";
+      resetBoard();
+      startNewRound(); // اینجا تایمر و وضعیت بازی رو برای هر راند تنظیم می‌کنه
+    }
+
+    function resetBoard() {
+      board = ["", "", "", "", "", "", "", "", ""];
+      boardEl.innerHTML = "";
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement("div");
+        cell.classList.add("cell");
+        cell.dataset.index = i;
+        cell.addEventListener("click", handleCellClick);
+        boardEl.appendChild(cell);
+      }
+    }
+
+    function handleCellClick(event) {
+      const index = event.target.dataset.index;
+      if (board[index] !== "" || gameEnded) return;
+      board[index] = currentPlayer.symbol;
+      event.target.innerText = currentPlayer.symbol;
+      event.target.style.color = currentPlayer.color;
+      event.target.style.boxShadow = `0 0 15px ${currentPlayer.color}`;
+      if (checkWin()) {
+        gameEnded = true;
+        currentPlayer.score++;
+        updateScoreboard();
+        setTimeout(() => displayWinMessage(currentPlayer.name), 300);
+        return;
+      }
+      if (board.every(cell => cell !== "")) {
+        gameEnded = true;
+        setTimeout(() => displayWinMessage("مساوی"), 300);
+        return;
+      }
+      currentPlayer = currentPlayer === PLAYER1 ? PLAYER2 : PLAYER1;
+      opponent = opponent === PLAYER1 ? PLAYER2 : PLAYER1;
+      if (vsRobot && !gameEnded && currentPlayer === PLAYER2) {
+        setTimeout(() => robotMove(), 1000);
+      }
+      resetTimer(); 
+    }
+
+    function robotMove() {
+      if (gameEnded) return;
+      let availableCells = board.map((c, i) => c === "" ? i : null).filter(i => i !== null);
+      const randomMove = availableCells[Math.floor(Math.random() * availableCells.length)];
+      const robotCell = document.querySelector(`.cell[data-index='${randomMove}']`);
+      board[randomMove] = currentPlayer.symbol;
+      robotCell.innerText = currentPlayer.symbol;
+      robotCell.style.color = currentPlayer.color;
+      robotCell.style.boxShadow = `0 0 15px ${currentPlayer.color}`;
+      if (checkWin()) {
+        gameEnded = true;
+        currentPlayer.score++;
+        updateScoreboard();
+        setTimeout(() => displayWinMessage(currentPlayer.name), 300);
+        return;
+      }
+      if (board.every(cell => cell !== "")) {
+        gameEnded = true;
+        setTimeout(() => displayWinMessage("مساوی"), 300);
+        return;
+      }
+      currentPlayer = PLAYER1;
+      opponent = PLAYER2;
+      resetTimer();
+    }
+
+    function checkWin() {
+      const winPatterns = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+      return winPatterns.some(([a,b,c]) => board[a] && board[a] === board[b] && board[a] === board[c]);
+    }
+
+    function displayWinMessage(winner) {
+      winMessage.style.display = "block";
+      winMessage.innerText = winner === "مساوی" ? "مساوی!" : `${winner} برنده شد!`;
+      setTimeout(() => {
+        winMessage.style.display = "none";
+        startNewRound(); // برد و شروع راند جدید با تایمر ریست شده
+      }, 2000);
+    }
+
+    function startNewRound() {
+      gameEnded = false;
+      currentPlayer = PLAYER1;
+      opponent = PLAYER2;
+      resetBoard();
+      resetTimer();
+      startTimer();
+    }
+
+    function fullReset() {
+      PLAYER1.score = 0;
+      PLAYER2.score = 0;
+      updateScoreboard();
+      startNewRound(); // امتیازها صفر و تایمر ریست میشه
+    }
+
+    function updateScoreboard() {
+      score1El.innerText = PLAYER1.score;
+      score2El.innerText = PLAYER2.score;
+    }
+
+    function startTimer() {
+      timeLeft = 15;
+      clearInterval(timer);
+      timer = setInterval(() => {
+        timerEl.innerText = `زمان باقی‌مانده: ${timeLeft}`;
+        timeLeft--;
+        if (timeLeft < 0) {
+          clearInterval(timer);
+          gameEnded = true;
+          setTimeout(() => displayWinMessage("مساوی"), 300);
+        }
+      }, 1000);
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      startTimer();
+    }
+
+    function goToMenu() {
+      menu.style.display = "flex";
+      game.style.display = "none";
+      fullReset(); 
+    }
+  </script>
+</body>
+</html>
